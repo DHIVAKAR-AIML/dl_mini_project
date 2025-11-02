@@ -1,0 +1,41 @@
+# Step 1: Import Libraries
+import torch
+from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
+from PIL import Image
+import requests
+from io import BytesIO
+from transformers.utils import hub
+
+# Set extended download timeout
+hub.HUGGINGFACE_HUB_HTTP_TIMEOUT = 60
+
+# Step 2: Load Pretrained Image Captioning Model
+model_name = "nlpconnect/vit-gpt2-image-captioning"
+
+model = VisionEncoderDecoderModel.from_pretrained(model_name)
+processor = ViTImageProcessor.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+model.eval()
+
+# Step 3: Define Caption Generation Function
+def generate_caption_from_url(image_url, max_length=30, num_beams=4):
+    response = requests.get(image_url)
+    image = Image.open(BytesIO(response.content)).convert("RGB")
+    pixel_values = processor(images=image, return_tensors="pt").pixel_values.to(device)
+    output_ids = model.generate(
+        pixel_values,
+        max_length=max_length,
+        num_beams=num_beams,
+        early_stopping=True
+    )
+    caption = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    return caption
+
+# Step 4: Load an Online Image and Generate Caption
+if __name__ == "__main__":
+    # Example image from Unsplash
+    image_url = "https://images.unsplash.com/photo-1518791841217-8f162f1e1131"
+    print("Caption:", generate_caption_from_url(image_url))
